@@ -42,7 +42,6 @@ router.get("/star", async (req, res, next) => {
             newResults.push({"_id": result._id[0],"title": result.title[0],"rating": result.rating,"genres": result.genres[0]});
         });
         res.send(newResults).status(200);
-        // res.send(results).status(200);
     } catch (error) {
     console.error("%s error return the list of movies rated with 5 stars - %s", timestamp, error);
     next(error);
