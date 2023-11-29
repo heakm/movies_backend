@@ -30,13 +30,12 @@ router.get("/star", async (req, res, next) => {
     console.log("%s return the list of movies rated with 5 stars", timestamp);
     try {
         let results = await db.collection('users').aggregate([{$unwind : "$movies"},{$lookup: {
-                    from: "movies",localField: "movies.movieid",foreignField:"_id",as: "moviesInformation"
-                }
-            },{$match: {"movies.rating":5}},
-            {$group: 
-                {_id:"$moviesInformation._id",title:{$first:"$moviesInformation.title"},rating:{$first:"$movies.rating"},
-                genres:{$first: "$moviesInformation.genres"}}},
-            {$limit: 2}]).toArray();
+                    from: "movies",localField: "movies.movieid",foreignField:"_id",as: "moviesInformation"}},{$match: {"movies.rating":5}},
+            {$group:
+                    {_id:"$moviesInformation._id",title:{$first:"$moviesInformation.title"},rating:{$first:"$movies.rating"},
+                        genres:{$first: "$moviesInformation.genres"}}
+            },{$sort:{_id:1}
+            }]).toArray();
         let newResults = [];
         results.forEach(result => {
             newResults.push({"_id": result._id[0],"title": result.title[0],"rating": result.rating,"genres": result.genres[0]});
@@ -101,24 +100,19 @@ router.post("/", async (req, res, next) => {
     }
 });
 
-//issue in getting the movie with and it's confusing between /star and id
 router.put("/", async (req, res, next) => {
     let params = req.body;
     console.log("%s saving movie to the system with id %s", timestamp, params._id);
 
-    // Check if the parameters object is empty
     if (!Object.keys(params).length) {
         return res.status(400).send({ error: 'Bad Request', message: 'The request body is empty' });
     }
-
     try {
-        // Check if a movie with the same _id already exists in the database
         const existingMovie = await db.collection('movies').findOne({ _id: params._id });
         if (existingMovie) {
             let results = await db.collection('users').updateOne({ "_id": id }, { $set: update });
             res.send(results).status(200);
         }
-
         const options = { ordered: true };
         await db.collection('movies').insertMany([params], options);
         res.sendStatus(201);
@@ -134,7 +128,6 @@ router.get("/higher/:higher_num", async (req, res, next) => {
     try {
         let results = await db.collection('users.movies').find({ "movieid": { $gt: higher_num } }).sort({}).toArray();
         res.send(results).status(200);
-
     } catch (error) {
         console.error("%s error in getting the list of higher number of movies until the limit of %d", timestamp, higher_num);
         next(error);
