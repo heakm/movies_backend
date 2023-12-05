@@ -2,6 +2,7 @@ import express from "express";
 import db from "../db/config.js";
 const router = express.Router();
 let timestamp = '[' + new Date().toISOString().substring(11,23) + '] - ';
+
 router.get("/count", async (req, res) => {
     console.log("%s getting first 50 users in the system",timestamp);
     try{
@@ -13,30 +14,94 @@ router.get("/count", async (req, res) => {
     }
 });
 
+router.get("/find/age/:ages", async (req, res, next) => {
+    let [minAge, maxAge] = req.params.ages.split("-");
+    console.log("%s find the users ages between %s and %s", timestamp, minAge, maxAge);
+    try {
+        let results = await db.collection("users").find({
+            $and: [
+                { age: { $gte: parseInt(minAge) } },
+                { age: { $lte: parseInt(maxAge) } }
+            ]
+        }).toArray();
+        res.send(results).status(200);
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post("/find/occupation", async (req, res, next) => {
+    let occupations = req.body.occupations;
+    console.log("%s find with occupation of %s", timestamp, occupations);
+    try {
+        let results = await db.collection("users").find({ occupation: { $in: occupations } }).toArray();
+        res.send(results).status(200);
+    } catch (error) {
+        next(error)
+    }
+});
+router.post("/find/occupation/change", async (req, res, next) => {
+    let oldOccupation = req.body.oldOccupation;
+    let newOccupation = req.body.newOccupation;
+    console.log("%s find users with occupation %s and change it with occupation %s", timestamp, oldOccupation,newOccupation);
+    try {
+        let cursor = db.collection("users").find({ occupation: oldOccupation });
+        while(await cursor.hasNext()) {
+            let doc = await cursor.next();
+            await db.collection("users").updateOne({ _id: doc._id }, { $set: { occupation: newOccupation } });
+        }
+        res.send("Occupation updated successfully").status(200);
+    } catch (error) {
+        next(error)
+    }
+});
+router.post("/find/occupation/count", async (req, res, next) => {
+    let occupations = req.body.occupations;
+    console.log("%s count users with the occupation of %s", timestamp, occupations);
+    try {
+        let results = await db.collection("users").countDocuments({ occupation: { $in: occupations } });
+        res.send({message: results}).status(200);
+    } catch (error) {
+        next(error)
+    }
+});
+router.get("/find/occupation",async (req,res,next)=>{
+    console.log("%s finding all occupations in the system",timestamp);
+    try{
+        let results = await db.collection('users').distinct('occupation');
+        res.send(results).status(200)
+    }catch (error){
+        res.status(404).send("Occupation error")
+        next(error)
+    }
+});
+router.get("/find/:name",async(req,res,next)=>{
+    let name = req.params.name;
+    console.log("%s finding the user with name %s",timestamp,name);
+    try{
+        let results = await db.collection('users').find({name : "Clifford Johnathan"}).toArray();
+        if (results.length > 0) {
+            let newResults = [];
+            results.forEach(result => {
+                newResults.push({"name": result.name,"occupation": result.occupation});
+            });
+            res.send(newResults).status(200);
+        } else {
+            res.status(404).send("User not found");
+        }
+    }catch(error){
+        next(error)
+    }
+});
 router.get("/star", async (req, res, next) => {
     console.log("%s return the list of movies rated with 5 stars", timestamp);
     try {
         // let results = await db.collection('movies').aggregate([{$match : {"genres": "Comedy|Drama|Romance"}},{$project :{_id:0}}]).toArray();
         let results = await db.collection('users').aggregate([
-            {
-                $lookup: {
-                    from: "movies",
-                    localField: "movies.movieid",
-                    foreignField:"_id",
-                    as: "highest_rated_movies"
-                }
-            },
-            {
-                $unwind : "$movie"
-            },
-            {$group: 
-                {
-                    _id: 0
-                }
-            },
-            {
-                $limit: 2
-            }
+            {$lookup: {from: "movies", localField: "movies.movieid", foreignField:"_id", as: "highest_rated_movies"}},
+            {$unwind : "$movie"},
+            {$group: {_id: 0}},
+            {$limit: 2}
             // {$match: { "highest_rated_movies.movies.rating": 5 }},
         ]).limit(4).toArray();
         res.send(results).status(200);
@@ -118,7 +183,7 @@ router.put("/:id", async(req,res,next) => {
     try{
         let update = req.body;
         if(!update || Object.keys(update).length === 0){
-            throw new Error("Invalid data received for updating user.");
+            res.status(500).send("error in the objects send")
         }
         let results = await db.collection('users').updateOne({"_id":id}, {$set: update});
         res.send(results).status(200);

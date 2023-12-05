@@ -3,7 +3,6 @@ import db from "../db/config.js";
 const router = express.Router();
 let timestamp = '[' + new Date().toISOString().substring(11, 23) + '] - ';
 
-
 router.get("/count",async (req,res,next)=>{
    console.log("%s getting the number of movies in the system",timestamp);
    try{
@@ -58,6 +57,32 @@ router.get("/:id", async (req, res, next) => {
         next(error);
     }
 });
+router.get("/release/between/:years",async (req,res,next)=>{
+    let [firstYear,lastYear] = req.params.years;
+    console.log("%s getting movies between %s and %s",timestamp,firstYear,lastYear)
+    try{
+        await db.collection('movies').find({}).toArray();
+    }catch (error){
+        next(error)
+    }
+})
+
+router.get("/genres/:genres",async(req,res,next)=>{
+    let genres = req.params.genres;
+    console.log("%s returning user by his genres %s",timestamp,genres);
+    try{
+        let results = await db.collection('movies').countDocuments({genres : {$regex:'Horror'}});
+        if(results > 0){
+            return res.status("200").send({count:results})
+        }
+        console.log("%s no result found when returning users by genres %s and found %d",timestamp,genres,results.length)
+        return res.status(404).send("No result found")
+    }catch (error){
+        console.log("%s error while returning users by genres %s",timestamp,genres)
+        next(error);
+    }
+
+})
 
 router.delete("/:id", async (req, res, next) => {
     let id = parseInt(req.params.id);
@@ -80,11 +105,9 @@ router.delete("/:id", async (req, res, next) => {
 router.post("/", async (req, res, next) => {
     let params = req.body;
     console.log("%s saving movie to the system with id %s", timestamp, params._id);
-
     if (!Object.keys(params).length) {
         return res.status(400).send({ error: 'Bad Request', message: 'The request body is empty' });
     }
-
     try {
         const existingMovie = await db.collection('movies').findOne({ _id: params._id });
         if (existingMovie) {
