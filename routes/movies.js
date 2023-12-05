@@ -66,14 +66,30 @@ router.get("/release/between/:years",async (req,res,next)=>{
         next(error)
     }
 })
-
+router.get("/genres/count/:genres", async (req, res, next) => {
+    let genres = req.params.genres.split('-'); // convert string to array
+    console.log("%s returning user by his genres %s", timestamp, genres);
+    const regexQuery = { genres: { $regex: '(' + genres.join('|') + ')', $options: 'i' } };
+    try {
+        let results = await db.collection('movies').countDocuments(regexQuery);
+        if (results > 0) {
+            return res.status(200).send({count: results})
+        }
+        console.log("%s no result found when returning users by genres %s and found %d", timestamp, genres, results.length)
+        return res.status(404).send("No result found")
+    } catch (error) {
+        console.log("%s error while returning users by genres %s", timestamp, genres)
+        next(error);
+    }
+})
 router.get("/genres/:genres",async(req,res,next)=>{
-    let genres = req.params.genres;
+    let genres = req.params.genres.split("-");
     console.log("%s returning user by his genres %s",timestamp,genres);
+    const regexQuery = { genres: { $regex: '(' + genres.join('|') + ')', $options: 'i' } };
     try{
-        let results = await db.collection('movies').countDocuments({genres : {$regex:'Horror'}});
-        if(results > 0){
-            return res.status("200").send({count:results})
+        let results = await db.collection('movies').find(regexQuery).toArray();
+        if(results.length > 0){
+            return res.status(200).send({count:results})
         }
         console.log("%s no result found when returning users by genres %s and found %d",timestamp,genres,results.length)
         return res.status(404).send("No result found")
@@ -81,7 +97,6 @@ router.get("/genres/:genres",async(req,res,next)=>{
         console.log("%s error while returning users by genres %s",timestamp,genres)
         next(error);
     }
-
 })
 
 router.delete("/:id", async (req, res, next) => {
