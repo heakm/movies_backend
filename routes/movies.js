@@ -14,7 +14,7 @@ router.get("/count",async (req,res,next)=>{
    }
 });
 
-router.get("/", async (req, res) => {
+router.get("/", async (req, res,next) => {
     console.log("%s getting first 50 movies in the system", timestamp);
     try {
         let results = await db.collection('movies').find({}).limit(50).toArray();
@@ -66,6 +66,27 @@ router.get("/release/between/:years",async (req,res,next)=>{
         next(error)
     }
 })
+router.get("/genres/year",async (req,res,next)=>{
+    console.log("%s getting all movies by splitting genres and adding year")
+    try{
+        let results = await db.collection('movies').aggregate([{$addFields: {
+                resultObj: {$regexFind: {regex: /\((\d{4})\)|-(\d{4})/, input: "$title"}}
+            }
+        }, {$addFields: {year: {$cond: [{ $ne: [ "$resultObj.group", undefined ] }, { $arrayElemAt: [ "$resultObj.captures", 0 ] },
+                        { $arrayElemAt: [ "$resultObj.captures", 1 ] }]}}
+        },
+            {$addFields: {genres: {$split: ["$genres", "|"]}}},
+            {$project: {_id: 1, title: 1, year: 1, genres: 1}}
+        ]).toArray();
+        if(results.length > 0){
+            res.status(200).send(results)
+        }
+        res.status(404).send("no results found");
+    }catch (error){
+        console.log("%s error in getting all movies by splitting genres and adding year",timestamp)
+        next(error)
+    }
+})
 router.get("/genres/count/:genres", async (req, res, next) => {
     let genres = req.params.genres.split('-'); // convert string to array
     console.log("%s returning user by his genres %s", timestamp, genres);
@@ -104,13 +125,14 @@ router.delete("/:id", async (req, res, next) => {
     console.log("%s deleting a movie with id %d", timestamp, id);
     try {
         let results = await db.collection('movies').deleteOne({ "_id": id });
-        if (!results || Object.keys(results).length === 0) {
-            return res.status(400).send({ error: 'Bad Request', message: 'The request body is empty' });
+        if (!(!results || Object.keys(results).length === 0)) {
+            if (results.deletedCount === 0) {
+                return res.status(404).send({error: 'Not Found', message: 'The requested resource was not found'});
+            }
+            res.send().status(204);
+        } else {
+            return res.status(400).send({error: 'Bad Request', message: 'The request body is empty'});
         }
-        if (results.deletedCount === 0) {
-            return res.status(404).send({ error: 'Not Found', message: 'The requested resource was not found' });
-        }
-        res.send().status(204);
     } catch (error) {
         console.error("%s error in deleting a movie with id [%s] - %s", timestamp, id, error);
         next(error);
