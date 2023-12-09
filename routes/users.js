@@ -79,7 +79,7 @@ router.get("/find/:name",async(req,res,next)=>{
     let name = req.params.name;
     console.log("%s finding the user with name %s",timestamp,name);
     try{
-        let results = await db.collection('users').find({name : "Clifford Johnathan"}).toArray();
+        let results = await db.collection('users').find({name : name}).toArray();
         if (results.length > 0) {
             let newResults = [];
             results.forEach(result => {
@@ -122,7 +122,69 @@ router.get("/", async (req, res) => {
         next(error);
     }
 });
-
+router.get("/:id/iso", async (req, res, next) => {
+    let id = parseInt(req.params.id);
+    console.log("%s retrieving user from the system with id %d by date", timestamp, id);
+    try {
+        let results = await db.collection('users').aggregate([{$match: {"_id": 6040}}, {$unwind: "$movies"},
+            {$addFields: {Date:{$dateToString: {
+                            format: "ISODate('%Y-%m-%dT%H:%M:%Sz')",
+                            date: {$toDate: {$multiply: [ "$movies.timestamp", 1000 ]}}
+                        }
+                    }
+                }
+            }
+        ]).toArray();
+        if (results.length > 0) {
+            res.send(results).status(200);
+        } else {
+            res.status(404).send("User not found");
+        }
+    } catch (error) {
+        console.error("%s retrieving user from the system with id [%s] - %s", timestamp, id, error);
+        next(error);
+    }
+});
+router.get("/movie/:id/watch",async (req,res,next)=>{
+    let movieid = parseInt(req.params.id);
+    try{
+        console.log("%s counting how many users watched the movie with id %d",timestamp,movieid);
+        let results = await db.collection("users").aggregate([{$unwind: "$movies"}, {$match: {"movies.movieid": movieid}},
+            {$group: {_id: null, count: {$sum: 1}}}]).toArray();
+        if(results.length > 0){
+            console.log("%s found %d users who watched this movie with id %d",timestamp,results[0].count,movieid)
+            res.status(200).send({count:results[0].count});
+        }else{
+            console.log("%s no users watched this movie with id %d",timestamp,results[0].count,movieid)
+            res.status(404).send("no one watched this movie")
+        }
+    }catch (error){
+        console.error("%s error in counting how many users watched the movie with id %s",timestamp,movieid)
+        next(error);
+    }
+});
+router.post("/movie/watch",async (req,res,next)=>{
+    let params = req.body;
+    if (!Object.keys(params).length) {
+        return res.status(400).send({ error: 'Bad Request', message: 'The request body is empty' });
+    }
+    let movieids = params.movieid;
+    try{
+        console.log("%s counting how many users watched the movies with ids %s",timestamp,movieids);
+        let results = await db.collection("users").aggregate([{$unwind: "$movies"}, {$match: {"movies.movieid": {$in:movieids}}},
+            {$group: {_id: null, count: {$sum: 1}}}]).toArray();
+        if(results.length > 0){
+            console.log("%s found %d users who watched this movies with ids %s",timestamp,results[0].count,movieids)
+            res.status(200).send({count:results[0].count});
+        }else{
+            console.log("%s no users watched this movies with ids %s",timestamp,movieids)
+            res.status(404).send("no one watched this movie")
+        }
+    }catch (error){
+        console.error("%s error in counting how many users watched the movie with ids %s",timestamp,movieids)
+        next(error);
+    }
+})
 router.get("/:id", async (req, res, next) => {
     let id = parseInt(req.params.id);
     console.log("%s retrieving user from the system with id %d", timestamp, id);
@@ -138,11 +200,29 @@ router.get("/:id", async (req, res, next) => {
         next(error);
     }
 });
+router.get("/rated/:num", async (req, res, next) => {
+    let number = parseInt(req.params.num);
+    if (!isNaN(number)) {
+        console.log("%s returning the numbers of users who rated more than %d times", timestamp, number);
+        let results = await db.collection('users').aggregate([
+            { $match: { movies: { $size: number } } },
+            { $group: { _id: null, count: { $sum: 1 } } }
+        ]).toArray();
+        if (results.length > 0) {
+            res.status(200).send({ count: results[0].count });
+        } else {
+            res.status(404).send(results)
+        }
+    } else {
+        console.error("%s error in returning the numbers of users who rated more than %d", timestamp, number);
+        next(error);
+    }
+});
 
 router.delete("/:id", async(req,res,next) => {
     let id = parseInt(req.params.id);
-    console.log("%s deleting user from the system with id %d",timestamp,id);
     try{
+        console.log("%s deleting user from the system with id %d",timestamp,id);
         let results = await db.collection('users').deleteOne({"_id":id});
         if (!results || Object.keys(results).length === 0) {
             return res.status(400).send({ error: 'Bad Request', message: 'The request body is empty' });

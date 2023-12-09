@@ -24,7 +24,20 @@ router.get("/", async (req, res,next) => {
         next(error);
     }
 });
-
+router.get("/split/genres", async (req, res,next) => {
+    console.log("%s getting first 50 movies in the system by split genres", timestamp);
+    try {
+        let results = await db.collection("movies").aggregate([
+            {$addFields: {genres: {$split: ["$genres", "|"]}}},
+            {$addFields: {year: {$regexFind: {input:"$title",regex:/.*(\d{4}).*/}}}},
+            {$project:{_id: "$_id", title: "$title", genres: "$genres", year: { $arrayElemAt: [ "$year.captures", 0 ] }}},
+            {$limit:50}]).toArray();
+        res.send(results).status(200);
+    } catch (error) {
+        console.error("%s getting all users in the system - %s", timestamp, error);
+        next(error);
+    }
+});
 router.get("/star", async (req, res, next) => {
     console.log("%s return the list of movies rated with 5 stars", timestamp);
     try {
