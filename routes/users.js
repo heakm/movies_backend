@@ -208,11 +208,7 @@ router.get("/rated/:num", async (req, res, next) => {
             { $match: { movies: { $size: number } } },
             { $group: { _id: null, count: { $sum: 1 } } }
         ]).toArray();
-        if (results.length > 0) {
-            res.status(200).send({ count: results[0].count });
-        } else {
-            res.status(404).send(results)
-        }
+        if (results.length > 0) {res.status(200).send({ count: results[0].count });} else {res.status(404).send(results)}
     } else {
         console.error("%s error in returning the numbers of users who rated more than %d", timestamp, number);
         next(error);
